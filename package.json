@@ -1,0 +1,45 @@
+{
+  "name": "hive-mcp-lateration",
+  "version": "1.0.0",
+  "description": "Structural Lateration (SLS) metering MCP server. The primitive AFiR/MiR/RogueCompute/Stream/OCR are children of: laterate off prior attested shapes, pay only the residual, and the signed receipt that proves the lateration is the invoice for the avoided cost. ML-DSA-65 (NIST FIPS 204), verifiable offline. Patent Pending. Hive Civilization.",
+  "type": "module",
+  "main": "server.js",
+  "bin": {
+    "hive-mcp-lateration": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "mcp",
+    "hive",
+    "structural-lateration",
+    "sls",
+    "metering",
+    "avoided-cost",
+    "ml-dsa",
+    "dilithium",
+    "fips-204",
+    "post-quantum",
+    "provenance",
+    "a2a",
+    "agent-to-agent",
+    "ai-agents",
+    "receipts",
+    "billing"
+  ],
+  "author": "Steve Rotzin <steve@thehiveryiq.com> (https://www.thehiveryiq.com)",
+  "license": "MIT",
+  "homepage": "https://github.com/srotzin/hive-mcp-lateration",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/srotzin/hive-mcp-lateration"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

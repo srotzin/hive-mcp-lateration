@@ -1,0 +1,129 @@
+# Smithery Registry — hive-mcp-lateration
+# https://smithery.ai
+
+startCommand:
+  type: http
+  configSchema:
+    type: object
+    properties: {}
+    required: []
+  url: https://hive-mcp-lateration.onrender.com/mcp
+
+name: hive-mcp-lateration
+displayName: hive-mcp-lateration — Structural Lateration (SLS) Metering
+version: "1.0.0"
+description: >
+  Structural Lateration (SLS) is the primitive AFiR, MiR, RogueCompute, Stream,
+  and OCR are children of. Instead of re-establishing structural work from
+  scratch, an agent laterates off prior attested shapes (n-body) and pays only
+  for the residual. Five tools — price_lateration, mint_receipt, verify_receipt,
+  settle_scouts, get_pubkey. The signed ML-DSA-65 (NIST FIPS 204) receipt that
+  proves the lateration IS the invoice for the avoided cost: dispute the bill
+  and you destroy the proof it ever helped you. Verify is always free. Patent
+  Pending. Settlement USDC on Base.
+
+author:
+  name: Steve Rotzin
+  email: steve@thehiveryiq.com
+  url: https://www.thehiveryiq.com
+
+license: MIT
+homepage: https://github.com/srotzin/hive-mcp-lateration
+repository:
+  type: git
+  url: https://github.com/srotzin/hive-mcp-lateration
+
+transport: streamable-http
+endpoint: https://hive-mcp-lateration.onrender.com/mcp
+protocol: "2024-11-05"
+
+categories:
+  - agent-to-agent
+  - inference
+  - observability
+  - provenance
+  - security
+
+tags:
+  - mcp
+  - hive
+  - structural-lateration
+  - sls
+  - metering
+  - avoided-cost
+  - ml-dsa
+  - fips-204
+  - post-quantum
+  - provenance
+  - a2a
+  - ai-agents
+
+tools:
+  - name: price_lateration
+    description: >
+      Price a structural lateration before minting (free, no signature). Returns
+      the nano receipt floor, savings clip (a share of avoided_cost, x1.5
+      cross-tenant), the counter-cyclical effective take rate, Hive revenue,
+      customer net, and the customer-always-ahead invariant. USDC on Base.
+    inputs:
+      - name: event
+        type: object
+        required: true
+        description: "{event_id, subject_call_id, reference_call_ids[], sls_subject, similarity_to_field, solo_cost_estimate, residual_cost, tenant_id, cross_tenant, timestamp}"
+  - name: mint_receipt
+    description: >
+      Mint the signed lateration receipt — the receipt is the invoice. Binds
+      avoided_cost into an ML-DSA-65 (FIPS 204) GCA envelope. Pass the same
+      "event". Returns {claims_root, envelope, pricing}.
+    inputs:
+      - name: event
+        type: object
+        required: true
+        description: "The lateration event to seal and bill."
+  - name: verify_receipt
+    description: >
+      Verify a lateration receipt offline (always free). Re-derives claims_root
+      from the asserted event (incl. avoided_cost) and checks it against the
+      signed root. Pass "event" and "claims_root".
+    inputs:
+      - name: event
+        type: object
+        required: true
+      - name: claims_root
+        type: string
+        required: true
+  - name: settle_scouts
+    description: >
+      Settle a cross-tenant scout reuse. Given settlement_notional_usd, returns
+      the 30 bps spread, the 50% scout payout, and the Hive keep. USDC on Base.
+    inputs:
+      - name: settlement_notional_usd
+        type: number
+        required: true
+  - name: get_pubkey
+    description: >
+      Get the ML-DSA-65 (FIPS 204) public key for offline verification. Free.
+
+runtime:
+  type: node
+  version: ">=18"
+  command: node server.js
+  env:
+    - name: PORT
+      default: "3000"
+      required: false
+    - name: ENABLE
+      default: "true"
+      required: false
+    - name: HIVE_SIGNER_URL
+      default: "https://hive-typed-signer.onrender.com"
+      required: false
+
+brand:
+  color: "#C08D23"
+  name: "Hive Civilization gold (Pantone 1245 C)"
+
+policy:
+  inbound_only: true
+  custody: never
+  role: metering_and_signing_only

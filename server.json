@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.srotzin/hive-mcp-lateration",
+  "title": "Hive Structural Lateration (SLS) Metering",
+  "description": "Price a structural lateration, mint the signed receipt that is the invoice for its avoided cost, verify it offline, and settle scouts. ML-DSA-65 (NIST FIPS 204), verifiable offline. The receipt is the invoice. Patent Pending.",
+  "version": "1.0.0",
+  "websiteUrl": "https://www.thehiveryiq.com",
+  "remotes": [
+    {
+      "url": "https://hive-mcp-lateration.onrender.com/mcp",
+      "type": "streamable-http"
+    }
+  ],
+  "repository": {
+    "url": "https://github.com/srotzin/hive-mcp-lateration",
+    "source": "github"
+  }
+}
