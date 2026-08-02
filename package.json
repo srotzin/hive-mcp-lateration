@@ -1,6 +1,6 @@
 {
   "name": "hive-mcp-lateration",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Structural Lateration (SLS) metering MCP server. The primitive AFiR/MiR/RogueCompute/Stream/OCR are children of: laterate off prior attested shapes, pay only the residual, and the signed receipt that proves the lateration is the invoice for the avoided cost. ML-DSA-65 (NIST FIPS 204), verifiable offline. Patent Pending. Hive Civilization.",
   "type": "module",
   "main": "server.js",

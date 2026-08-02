@@ -1,23 +1,29 @@
 #!/usr/bin/env node
 /**
- * hive-mcp-lateration — Structural Lateration (SLS) metering MCP Server
+ * hive-mcp-lateration: Structural Lateration (SLS) metering MCP Server
  *
  * Structural Lateration is the primitive AFiR, MiR, RogueCompute, Stream, and
  * OCR are children of: instead of re-establishing structural work from scratch,
  * an agent laterates off prior attested shapes (n-body) and pays only for the
- * residual. The avoided cost is the value created — and the signed receipt that
+ * residual. The avoided cost is the value created, and the signed receipt that
  * proves the lateration IS the invoice for it. Dispute the bill and you destroy
  * the proof the lateration ever helped you.
  *
- * Five tools — price_lateration, mint_receipt, verify_receipt, settle_scouts,
+ * Five tools: price_lateration, mint_receipt, verify_receipt, settle_scouts,
  * get_pubkey. Every receipt is ML-DSA-65 (NIST FIPS 204) signed by the Hive
- * typed signer and verifiable offline with the returned envelope.
+ * typed signer.
+ *
+ * HONESTY NOTE: verify_receipt in this server is NOT an offline verifier. It
+ * re-derives the claims_root by making a live call to the upstream signer's
+ * POST /sigr/gca route (the same route mint_receipt uses) and compares roots.
+ * It requires network access to HIVE_SIGNER_URL every time it runs. Do not
+ * describe it as offline-verifiable anywhere in this codebase or its docs.
  *
  * Three metered streams:
- *   1. Nano receipt floor — a fixed micro-fee per lateration receipt.
- *   2. Savings clip       — a share of avoided_cost (counter-cyclical: the take
+ *   1. Nano receipt floor: a fixed micro-fee per lateration receipt.
+ *   2. Savings clip: a share of avoided_cost (counter-cyclical: the take
  *                           rate rises as solo cost falls).
- *   3. Scout settlement   — a spread plus a scout share on cross-tenant reuse,
+ *   3. Scout settlement: a spread plus a scout share on cross-tenant reuse,
  *                           with a privacy premium when laterating off another
  *                           tenant's attested shape.
  * Invariant: the customer's net always lands below what going solo would cost.
@@ -29,13 +35,36 @@ import express from 'express';
 import { createHash } from 'node:crypto';
 
 const SERVICE     = 'hive-mcp-lateration';
-const VERSION     = '1.0.0';
+const VERSION     = '1.1.0';
 const PORT        = process.env.PORT || 3000;
 const ENABLE      = (process.env.ENABLE ?? 'true') !== 'false';
 const BRAND_GOLD  = '#C08D23';
 const SIGNER_BASE = process.env.HIVE_SIGNER_URL || 'https://hive-typed-signer.onrender.com';
 const PUBKEY_URL  = `${SIGNER_BASE}/pubkey`;
 const GCA_PATH    = '/sigr/gca';
+
+// ─── Environment validation (fail closed) ──────────────────────────────────
+function validateEnv() {
+  const errors = [];
+  try {
+    const u = new URL(SIGNER_BASE);
+    if (!/^https?:$/.test(u.protocol)) errors.push(`HIVE_SIGNER_URL must be http(s): got "${SIGNER_BASE}"`);
+  } catch {
+    errors.push(`HIVE_SIGNER_URL is not a valid URL: "${SIGNER_BASE}"`);
+  }
+  const portNum = Number(PORT);
+  if (!Number.isInteger(portNum) || portNum <= 0 || portNum > 65535) {
+    errors.push(`PORT must be a valid TCP port: got "${PORT}"`);
+  }
+  return errors;
+}
+
+const ENV_ERRORS = validateEnv();
+if (ENV_ERRORS.length > 0) {
+  console.error(`[${SERVICE}] FATAL: invalid environment, refusing to start:`);
+  for (const e of ENV_ERRORS) console.error(`  - ${e}`);
+  process.exit(1);
+}
 
 // ─── Rate card (public, USDC on Base) ─────────────────────────────────────────
 const RATE = {
@@ -105,7 +134,7 @@ function settleScouts(args) {
 
 function round6(x) { return Math.round(Number(x) * 1e6) / 1e6; }
 
-// canonical commit over the event — avoided_cost is part of the committed
+// canonical commit over the event; avoided_cost is part of the committed
 // payload, so the bill and the proof are the SAME object. Tamper any field
 // (esp. avoided_cost) -> commit changes -> signed root no longer matches.
 // Mirrors structural_lateration.commit_event (sorted keys, compact separators).
@@ -191,7 +220,7 @@ const TOOLS = [
   },
   {
     name: 'mint_receipt',
-    description: 'Mint the signed lateration receipt — the receipt IS the invoice. Binds avoided_cost into an ML-DSA-65 (NIST FIPS 204) signed GCA envelope so the dollar amount is cryptographically bound to the work. Dispute the bill by tampering avoided_cost and the receipt no longer verifies — you lose the proof the lateration ever helped you. Pass the same "event" object as price_lateration. Returns {claims_root, envelope, pricing}. Settlement USDC on Base.',
+    description: 'Mint the signed lateration receipt: the receipt IS the invoice. Binds avoided_cost into an ML-DSA-65 (NIST FIPS 204) signed GCA envelope so the dollar amount is cryptographically bound to the work. Dispute the bill by tampering avoided_cost and the receipt no longer verifies; you lose the proof the lateration ever helped you. Pass the same "event" object as price_lateration. Returns {claims_root, envelope, pricing}. Settlement USDC on Base.',
     inputSchema: {
       type: 'object',
       properties: { event: { type: 'object', description: 'The lateration event to seal and bill.' } },
@@ -200,7 +229,7 @@ const TOOLS = [
   },
   {
     name: 'verify_receipt',
-    description: 'Verify a lateration receipt offline (always free). Re-derives the claims_root from the asserted event (including avoided_cost) and checks it against the signed receipt root. True iff the lateration AND its billed avoided_cost are authentic. No secret required. Pass the "event" and the "claims_root" returned by mint_receipt.',
+    description: 'Verify a lateration receipt (always free, no secret required). IMPORTANT: this is NOT an offline check: it re-derives the claims_root by calling the same live upstream signer endpoint (POST /sigr/gca) that mint_receipt uses, then compares roots. It needs network access to HIVE_SIGNER_URL to run; it cannot be evaluated purely locally against the returned envelope the way SiGR\'s own verify_receipt can. It confirms the lateration AND its billed avoided_cost are authentic relative to what the live signer would (re)compute right now. Pass the "event" and the "claims_root" returned by mint_receipt.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -256,10 +285,12 @@ async function executeTool(name, args) {
     const valid = !!rederived && rederived === args.claims_root;
     return { type: 'text', text: JSON.stringify({
       valid,
-      reasons: valid ? ['claims_root matches — lateration and billed avoided_cost are authentic']
-                     : ['claims_root mismatch — event tampered or wrong receipt; bill is disputed and proof is void'],
+      reasons: valid ? ['claims_root matches: lateration and billed avoided_cost are authentic']
+                     : ['claims_root mismatch: event tampered or wrong receipt; bill is disputed and proof is void'],
       rederived_root: rederived,
       provided_root: args.claims_root,
+      verification_method: 'live_upstream_call',
+      verification_limitation: 'This check called the live upstream signer (POST /sigr/gca on HIVE_SIGNER_URL) to re-derive the root. It is not an offline/local verification; it required network access to the signer to run.',
     }, null, 2) };
   }
   if (name === 'settle_scouts') {
@@ -303,7 +334,7 @@ app.post('/mcp', async (req, res) => {
           result: {
             protocolVersion: '2024-11-05',
             capabilities: { tools: { listChanged: false } },
-            serverInfo: { name: SERVICE, version: VERSION, description: 'Structural Lateration (SLS) metering. The receipt is the invoice. ML-DSA-65 signed, verifiable offline. Patent Pending. Hive Civilization.' },
+            serverInfo: { name: SERVICE, version: VERSION, description: 'Structural Lateration (SLS) metering. The receipt is the invoice. ML-DSA-65 signed by the upstream typed signer; verify_receipt re-checks live against upstream, it is not an offline verifier. Patent Pending. Hive Civilization.' },
           },
         });
       case 'tools/list':
@@ -334,14 +365,14 @@ app.get('/.well-known/mcp.json', (_req, res) => res.json({
   protocol: '2024-11-05',
   transport: 'streamable-http',
   endpoint: '/mcp',
-  description: 'Structural Lateration (SLS) metering. Price a lateration, mint the signed receipt that is the invoice, verify it offline, settle scouts. ML-DSA-65 (FIPS 204). Patent Pending. Hive Civilization.',
+  description: 'Structural Lateration (SLS) metering. Price a lateration, mint the signed receipt that is the invoice, re-verify it against the live upstream signer (not an offline check), settle scouts. ML-DSA-65 (FIPS 204). Patent Pending. Hive Civilization.',
   tools: TOOLS.map(t => ({ name: t.name, description: t.description })),
   brand_color: BRAND_GOLD,
 }));
 
 app.get('/.well-known/agent.json', (_req, res) => res.json({
   name: SERVICE,
-  description: 'Structural Lateration metering surface for the Hive agent economy. The signed receipt is the invoice; every receipt ML-DSA-65 signed (FIPS 204) and verifiable offline.',
+  description: 'Structural Lateration metering surface for the Hive agent economy. The signed receipt is the invoice; every receipt ML-DSA-65 signed (FIPS 204) by the upstream typed signer. verify_receipt calls upstream live and is not an offline verifier.',
   url: `https://${SERVICE}.onrender.com`,
   provider: { organization: 'Hive Civilization', url: 'https://www.thehiveryiq.com', contact: 'steve@thehiveryiq.com' },
   capabilities: ['structural-lateration', 'metered-receipts', 'avoided-cost-billing', 'scout-settlement', 'provenance'],
@@ -349,5 +380,10 @@ app.get('/.well-known/agent.json', (_req, res) => res.json({
   brand_color: BRAND_GOLD,
 }));
 
-if (!ENABLE) console.log(`[${SERVICE}] ENABLE=false — dormant (health only)`);
+// Honest 404: no fabricated success on unknown routes.
+app.use((req, res) => {
+  res.status(404).json({ error: 'not_found', path: req.path, service: SERVICE });
+});
+
+if (!ENABLE) console.log(`[${SERVICE}] ENABLE=false (dormant, health only)`);
 app.listen(PORT, () => console.log(`[${SERVICE}] v${VERSION} listening on :${PORT} -> ${SIGNER_BASE}`));
